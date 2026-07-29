@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Post } from '../lib/types'
 import { CATEGORIES, formatDate, slugify } from '../lib/types'
+import type { Session } from '@supabase/supabase-js'
 
 type Draft = {
   title: string
@@ -31,6 +32,97 @@ const EMPTY: Draft = {
 }
 
 export default function Admin() {
+  const [session, setSession] = useState<Session | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession()
+      setSession(data.session)
+      setAuthLoading(false)
+    })()
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess)
+    })
+    return () => { sub.subscription.unsubscribe() }
+  }, [])
+
+  if (authLoading) {
+    return <div className="container-blog py-20 text-center text-ink-400">Carregando...</div>
+  }
+  if (!session) {
+    return <LoginScreen />
+  }
+  return <AdminPanel />
+}
+
+function LoginScreen() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+    if (err) {
+      setError('E-mail ou senha incorretos.')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="container-prose py-16">
+      <div className="mx-auto max-w-sm">
+        <div className="mb-8 text-center">
+          <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">Painel administrativo</p>
+          <h1 className="mt-1 text-3xl font-bold text-ink-900">Entrar</h1>
+          <p className="mt-2 text-sm text-ink-500">Acesso restrito à administração do blog.</p>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-ink-100 bg-white p-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-ink-700">E-mail</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              className="mt-1 w-full rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-ink-700">Senha</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              className="mt-1 w-full rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={loading} className="btn-primary w-full">
+            {loading ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+        <div className="mt-6 text-center">
+          <Link to="/" className="text-sm text-ink-500 hover:text-brand-600">← Voltar para o blog</Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AdminPanel() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -95,18 +187,17 @@ export default function Admin() {
       author: draft.author.trim() || 'Equipe Blog dos Gatos',
       featured: draft.featured,
     }
+    let success = false
     if (editingId) {
       const { error: err } = await supabase.from('posts').update(payload).eq('id', editingId)
-      if (err) setError(err.message)
+      if (err) setError(err.message); else success = true
     } else {
       const { error: err } = await supabase.from('posts').insert(payload)
-      if (err) setError(err.message)
+      if (err) setError(err.message); else success = true
     }
     setSaving(false)
-    if (!error && !setError) {
+    if (success) {
       resetForm()
-      load()
-    } else {
       load()
     }
   }
@@ -118,6 +209,10 @@ export default function Admin() {
     load()
   }
 
+  async function onSignOut() {
+    await supabase.auth.signOut()
+  }
+
   return (
     <div className="container-blog py-10">
       <header className="mb-8 flex items-center justify-between">
@@ -125,7 +220,10 @@ export default function Admin() {
           <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">Painel administrativo</p>
           <h1 className="mt-1 text-3xl font-bold text-ink-900">Gerenciar postagens</h1>
         </div>
-        <Link to="/" className="btn-ghost">Ver o blog</Link>
+        <div className="flex items-center gap-3">
+          <Link to="/" className="btn-ghost">Ver o blog</Link>
+          <button onClick={onSignOut} className="btn-ghost">Sair</button>
+        </div>
       </header>
 
       {error && (
