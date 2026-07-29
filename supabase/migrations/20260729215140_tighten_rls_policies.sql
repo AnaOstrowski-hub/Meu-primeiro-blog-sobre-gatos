@@ -37,6 +37,18 @@ poder realizar essas operacoes. O painel administrativo agora exige login
 */
 
 -- =========================
+-- Funcao is_admin()
+-- =========================
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT coalesce(auth.jwt() ->> 'email', '') = 'admin@blogdosgatos.com.br'
+$$;
+
+-- =========================
 -- posts
 -- =========================
 DROP POLICY IF EXISTS "anon_select_posts" ON posts;
@@ -45,15 +57,15 @@ CREATE POLICY "anon_select_posts" ON posts FOR SELECT
 
 DROP POLICY IF EXISTS "anon_insert_posts" ON posts;
 CREATE POLICY "auth_insert_posts" ON posts FOR INSERT
-  TO authenticated WITH CHECK (true);
+  TO authenticated WITH CHECK (is_admin());
 
 DROP POLICY IF EXISTS "anon_update_posts" ON posts;
 CREATE POLICY "auth_update_posts" ON posts FOR UPDATE
-  TO authenticated USING (true) WITH CHECK (true);
+  TO authenticated USING (is_admin()) WITH CHECK (is_admin());
 
 DROP POLICY IF EXISTS "anon_delete_posts" ON posts;
 CREATE POLICY "auth_delete_posts" ON posts FOR DELETE
-  TO authenticated USING (true);
+  TO authenticated USING (is_admin());
 
 -- =========================
 -- comments
@@ -74,14 +86,14 @@ CREATE POLICY "public_insert_comments" ON comments FOR INSERT
 
 DROP POLICY IF EXISTS "anon_delete_comments" ON comments;
 CREATE POLICY "auth_delete_comments" ON comments FOR DELETE
-  TO authenticated USING (true);
+  TO authenticated USING (is_admin());
 
 -- =========================
 -- newsletter
 -- =========================
 DROP POLICY IF EXISTS "anon_select_newsletter" ON newsletter;
 CREATE POLICY "auth_select_newsletter" ON newsletter FOR SELECT
-  TO authenticated USING (true);
+  TO authenticated USING (is_admin());
 
 DROP POLICY IF EXISTS "anon_insert_newsletter" ON newsletter;
 CREATE POLICY "public_insert_newsletter" ON newsletter FOR INSERT
@@ -90,4 +102,4 @@ CREATE POLICY "public_insert_newsletter" ON newsletter FOR INSERT
 
 DROP POLICY IF EXISTS "anon_delete_newsletter" ON newsletter;
 CREATE POLICY "auth_delete_newsletter" ON newsletter FOR DELETE
-  TO authenticated USING (true);
+  TO authenticated USING (is_admin());
